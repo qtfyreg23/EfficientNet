@@ -5,7 +5,9 @@ from PIL import Image  # 导入 Pillow 中的 Image 类，用于图像加载与�
 import matplotlib
 matplotlib.use('TkAgg')  # 或者 'Agg'、'Qt5Agg' 等
 import matplotlib.pyplot as plt  # 导入 matplotlib，用于绘图
-
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置支持中文的字体
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+import random
 import torch  # 导入 PyTorch 主模块
 import torch.nn as nn  # 导入神经网络模块
 from torch.utils.data import Dataset, DataLoader, random_split  # 导入数据集及数据加载模块
@@ -51,7 +53,8 @@ class EyeDataset(Dataset):
 
 # 2. 定义数据预处理和数据增强方式
 train_transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # 调整图像尺寸为 224x224
+    transforms.Resize(256),  # 缩放较小边为256，保持宽高比
+    transforms.CenterCrop(224),  # 从中心裁剪224x224
     transforms.RandomRotation(15),  # 随机旋转图像，角度范围 ±15 度
     transforms.RandomHorizontalFlip(),  # 随机水平翻转图像
     transforms.ToTensor(),  # 转换为张量
@@ -59,13 +62,79 @@ train_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])  # 使用 ImageNet 标准差归一化
 ])
 val_transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # 调整图像尺寸为 224x224
+    transforms.Resize(256),  # 缩放较小边为256，保持宽高比
+    transforms.CenterCrop(224),  # 从中心裁剪224x224
     transforms.ToTensor(),  # 转换为张量
     transforms.Normalize(mean=[0.485, 0.456, 0.406],  # 均值归一化
                          std=[0.229, 0.224, 0.225])  # 标准差归一化
 ])
 
+#像素归一化
+point_transform = transforms.Compose([
+    transforms.Resize(256),  # 缩放较小边为256，保持宽高比
+    transforms.CenterCrop(224),  # 从中心裁剪224x224
+    transforms.ToTensor(),  # 转换为张量
+])
+#RGB归一化
+RGB_transform = transforms.Compose([
+    transforms.Resize(256),  # 缩放较小边为256，保持宽高比
+    transforms.CenterCrop(224),  # 从中心裁剪224x224
+    transforms.ToTensor(),  # 转换为张量
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],  # 使用 ImageNet 均值归一化
+                         std=[0.229, 0.224, 0.225])  # 使用 ImageNet 标准差归一化
+])
+#数据增强
+data_transform = transforms.Compose([
+    transforms.Resize(256),  # 缩放较小边为256，保持宽高比
+    transforms.CenterCrop(224),  # 从中心裁剪224x224
+    transforms.RandomRotation(15),  # 随机旋转图像，角度范围 ±15 度
+    transforms.RandomHorizontalFlip(),  # 随机水平翻转图像
+    transforms.ToTensor(),  # 转换为张量
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],  # 使用 ImageNet 均值归一化
+                         std=[0.229, 0.224, 0.225])  # 使用 ImageNet 标准差归一化
+])
 
+def vision(image_paths):
+    #image_paths = ['image1.jpg', 'image2.jpg', 'image3.jpg']  # 替换为实际图片路径
+    # 获取所有图片文件
+    all_images = [img for img in os.listdir(image_paths) if img.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    # 随机选择三张图片
+    image_paths = random.sample(all_images, 3) if len(all_images) >= 3 else all_images
+    fig, axes = plt.subplots(len(image_paths), 4, figsize=(12, 12))
+    for i, img_path in enumerate(image_paths):
+        img_paths = os.path.join(images_dir, img_path)
+        original = Image.open(img_paths).convert('RGB')
+        point_t = point_transform(original)
+        rgb_t = RGB_transform(original)
+        data_t = data_transform(original)
+
+        point_img = point_t.permute(1, 2, 0).numpy()
+        rgb_img = rgb_t.permute(1, 2, 0).numpy()
+        data_img = data_t.permute(1, 2, 0).numpy()
+
+        point_img = np.clip( point_img, 0, 1)  # 将值裁剪到 [0, 1] 范围内
+        rgb_img = np.clip(rgb_img, 0, 1)  # 将值裁剪到 [0, 1] 范围内
+        data_img = np.clip(data_img, 0, 1)  # 将值裁剪到 [0, 1] 范围内
+
+        # 显示图像
+        axes[i, 0].imshow(original)
+        axes[i, 0].set_title("原图")
+        axes[i, 0].axis("off")
+
+        axes[i, 1].imshow(point_img)
+        axes[i, 1].set_title("像素归一化")
+        axes[i, 1].axis("off")
+
+        axes[i, 2].imshow(rgb_img)
+        axes[i, 2].set_title("RGB归一化")
+        axes[i, 2].axis("off")
+
+        axes[i, 3].imshow(data_img)
+        axes[i, 3].set_title("数据增强")
+        axes[i, 3].axis("off")
+
+    plt.tight_layout()
+    plt.show()
 # 3. 定义基于 EfficientNet 的双路网络，用于同时处理左右眼图像
 class DualEfficientNet(nn.Module):
     def __init__(self, num_classes=8):
@@ -134,9 +203,12 @@ def train_model(model, criterion, optimizer, train_loader, val_loader, num_epoch
         all_probs = 1.0 / (1.0 + np.exp(-all_outputs))  # 对 logits 应用 sigmoid，得到概率
         all_pred_labels = (all_probs > 0.5).astype(int)  # 根据阈值0.5二值化
 
+        print(f"预测值为{all_pred_labels.flatten()}")
+        print(f"真实值为{all_labels.astype(int).flatten()}")
+
         # 计算精确率和召回率（将所有标签展平后计算 micro 平均）
-        precision = precision_score(all_labels.flatten(), all_pred_labels.flatten(), average='micro', zero_division=0)
-        recall = recall_score(all_labels.flatten(), all_pred_labels.flatten(), average='micro', zero_division=0)
+        precision = precision_score(all_labels.flatten(), all_pred_labels.flatten(),  zero_division=0)
+        recall = recall_score(all_labels.flatten(), all_pred_labels.flatten(), zero_division=0)
         val_precisions.append(precision)
         val_recalls.append(recall)
 
@@ -182,6 +254,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # 选择 GPU（若可用）或 CPU
 
     full_dataset = EyeDataset(excel_path, images_dir, transform=train_transform)  # 创建完整数据集对象
+    vision(images_dir)
 
     # 划分训练集和验证集（80%训练，20%验证）
     train_size = int(0.8 * len(full_dataset))
@@ -199,5 +272,4 @@ if __name__ == "__main__":
 
     # 开始训练并评估，返回模型及各项指标
     model, train_losses, val_losses, val_precisions, val_recalls = train_model(
-        model, criterion, optimizer, train_loader, val_loader, num_epochs=num_epochs, device=device
-    )
+        model, criterion, optimizer, train_loader, val_loader, num_epochs=num_epochs, device=device)
