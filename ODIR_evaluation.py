@@ -198,7 +198,7 @@ if __name__ == "__main__":
     criterion = nn.BCEWithLogitsLoss()  # 定义多标签分类损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # 定义 Adam 优化器
 
-    # 开始训练并评估，返回模型及各项指标
+    #  开始训练并评估，返回模型及各项指标
     model, train_losses, val_losses, val_precisions, val_recalls = train_model(
         model, criterion, optimizer, train_loader, val_loader, num_epochs=num_epochs, device=device
     )
