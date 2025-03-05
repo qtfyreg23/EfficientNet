@@ -81,7 +81,7 @@ def process_test_data(model, test_images_dir, output_csv_path):
     print(f"预测结果已保存到 {output_csv_path}")
 
 
-#    主程序
+# 主程序
 if __name__ == "__main__":
     # 加载训练好的模型
     model = load_model(model_path)
