@@ -289,7 +289,6 @@ def train_model(model, criterion, optimizer, train_loader, val_loader, num_epoch
         all_labels_list = all_labels.astype(int).tolist()  # 转换为列表
         all_pred_labels_list = all_pred_labels.tolist()  # 转换为列表
         all_id_list = all_id.flatten().tolist()  # 转换为列表
-        print(type(all_id_list),type(all_labels_list),type(all_pred_labels_list))
         save_model(model, epoch + 1, save_interval, save_enabled, save_path, all_id_list, all_labels_list, all_pred_labels_list)
 
     # 绘制训练/验证 loss 曲线和验证阶段精确率、召回率曲线
